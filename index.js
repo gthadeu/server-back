@@ -77,30 +77,6 @@ app.get('/password', async (req, res) => {
   }
 });
 
-app.get('/emaillogged', async (req, res) => {
-  try {
-    // Faça a consulta no banco de dados para obter o email do usuário
-    const query = 'SELECT email FROM users WHERE email = $1';
-    const values = ['lucas@gmail.com'];
-
-    const result = await pool.query(query, values);
-
-    if (result.rows.length === 0) {
-      // Usuário não encontrado, retorne um erro
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-
-    // Extraia o email do resultado da consulta
-    const storedEmail = result.rows[0].email;
-
-    // Retorne o email como resposta
-    res.json({ email: storedEmail });
-  } catch (error) {
-    console.error('Erro ao verificar o email:', error);
-    res.status(500).json({ error: 'Erro ao verificar o email' });
-  }
-});
-
   app.post('/login', (req, res) => {
     const sentLoginEmail = req.body.LoginEmail;
     const sentLoginSenha = req.body.LoginSenha;
