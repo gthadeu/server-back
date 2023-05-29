@@ -146,6 +146,24 @@ app.get('/password', async (req, res) => {
   }
 });
 
+app.put('/update-password', async (req, res) => {
+  try {
+    const { senha } = req.body; // Obtenha a senha do corpo da requisição
+
+    // Realize a atualização da senha no banco de dados
+    const query = 'UPDATE users SET senha = $1 WHERE id = $2';
+    const values = [senha, 1]; // Substitua "req.user.id" pelo ID do usuário que deseja atualizar a senha
+
+    await pool.query(query, values);
+
+    res.status(200).json({ message: 'Senha atualizada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao atualizar a senha:', error);
+    res.status(500).json({ error: 'Erro ao atualizar a senha' });
+  }
+});
+
+
   app.put("/password", (req, res) => {
     const userId = req.session.userId;
     if (!userId) {
@@ -208,35 +226,35 @@ app.get('/password', async (req, res) => {
     });
   });
   
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-app.post("/forgot-password", async (req, res) => {
-  try {
-    const { email, recoveryLink } = req.body;
-
-    // Configurar o email
-    const msg = {
-      to: email,
-      from: process.env.EMAIL_FROM,
-      subject: "Recuperação de Senha",
-      html: `
-        <p>Olá,</p>
-        <p>Você solicitou a recuperação de senha. Clique no link abaixo para redefinir sua senha:</p>
-        <a href="${recoveryLink}">${recoveryLink}</a>
-        <p>Se você não solicitou a recuperação de senha, ignore este email.</p>
-      `,
-    };
-
-    // Enviar o email usando o SendGrid
-    await sgMail.send(msg);
-
-    console.log("Email de recuperação de senha enviado com sucesso!");
-    res.status(200).json({ message: "Email de recuperação de senha enviado com sucesso!" });
-  } catch (error) {
-    console.error("Erro ao enviar o email de recuperação de senha:", error);
-    res.status(500).json({ error: "Erro ao enviar o email de recuperação de senha. Por favor, tente novamente mais tarde." });
-  }
-});
+  app.post("/forgot-password", async (req, res) => {
+    try {
+      const { email, recoveryLink } = req.body;
+  
+      // Configurar o email
+      const msg = {
+        to: email,
+        from: process.env.EMAIL_FROM,
+        subject: "Recuperação de Senha",
+        html: `
+          <p>Olá,</p>
+          <p>Você solicitou a recuperação de senha. Clique no link abaixo para redefinir sua senha:</p>
+          <a href="${recoveryLink}">${recoveryLink}</a>
+          <p>Se você não solicitou a recuperação de senha, ignore este email.</p>
+        `,
+      };
+  
+      // Enviar o email usando o SendGrid
+      await sgMail.send(msg);
+  
+      console.log("Email de recuperação de senha enviado com sucesso!");
+      res.status(200).json({ message: "Email de recuperação de senha enviado com sucesso!" });
+    } catch (error) {
+      console.error("Erro ao enviar o email de recuperação de senha:", error);
+      res.status(500).json({ error: "Erro ao enviar o email de recuperação de senha. Por favor, tente novamente mais tarde." });
+    }
+  });
   
   // Delete user
   app.delete("/users/:id", (req, res) => {
