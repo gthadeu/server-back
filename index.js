@@ -3,6 +3,10 @@ const app = express();
 const { Pool } = require("pg");
 const cors = require("cors");
 const session = require('express-session')
+const fs = require('fs');
+const csv = require('csv-parser');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
 
 const sgMail = require("@sendgrid/mail");
 require("dotenv").config();
@@ -255,7 +259,26 @@ app.put('/update-password', async (req, res) => {
       res.status(500).json({ error: "Erro ao enviar o email de recuperação de senha. Por favor, tente novamente mais tarde." });
     }
   });
+
+  app.post('/create-table',upload.single('file'), (req, res) => {
+    const tableName = req.body.nameTable;
   
+    // Query para criar a tabela com o nome recebido
+    const createTableQuery = `CREATE TABLE ${tableName} (id SERIAL PRIMARY KEY, name VARCHAR(255))`;
+    const filePath = req.file.path;
+    console.log(filePath)
+
+    pool.query(createTableQuery, (err, result) => {
+      if (err) {
+        console.error('Error creating table:', err);
+        res.status(500).send({ error: 'Error creating table' });
+      } else {
+        console.log(`Table "${tableName}" created successfully!`);
+        res.send({ message: `Table "${tableName}" created successfully!` });
+      }
+    });
+  });
+
   // Delete user
   app.delete("/users/:id", (req, res) => {
     const userId = req.params.id;
