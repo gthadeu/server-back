@@ -7,6 +7,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
+const { format } = require('pg-format');
 
 const sgMail = require("@sendgrid/mail");
 require("dotenv").config();
@@ -260,23 +261,75 @@ app.put('/update-password', async (req, res) => {
     }
   });
 
-  app.post('/create-table',upload.single('file'), (req, res) => {
-    const tableName = req.body.nameTable;
+  let tableNameGlobal = '';
+  let filePathGlobal = '';
   
-    // Query para criar a tabela com o nome recebido
-    const createTableQuery = `CREATE TABLE ${tableName} (id SERIAL PRIMARY KEY, name VARCHAR(255))`;
-    const filePath = req.file.path;
-    console.log(filePath)
-
+  app.post('/create-table', upload.single('file'), (req, res) => {
+    tableNameGlobal = req.body.nameTable;
+    filePathGlobal = req.file.path;
+  
+    // Criação da tabela
+    const createTableQuery = `CREATE TABLE ${tableNameGlobal} (id SERIAL PRIMARY KEY)`;
+  
     pool.query(createTableQuery, (err, result) => {
       if (err) {
         console.error('Error creating table:', err);
         res.status(500).send({ error: 'Error creating table' });
       } else {
-        console.log(`Table "${tableName}" created successfully!`);
-        res.send({ message: `Table "${tableName}" created successfully!` });
+        console.log(`Table "${tableNameGlobal}" created successfully!`);
+  
+        res.send({ message: `Table "${tableNameGlobal}" created successfully!`, result: [tableNameGlobal, filePathGlobal] });
       }
     });
+  });
+  
+  app.get('/get-table-info', (req, res) => {
+    res.send({ tableName: tableNameGlobal, filePath: filePathGlobal });
+  });
+
+  app.post('/process-table', (req, res) => {
+    const { tableName, filePath } = req.body;
+  
+    // Lendo o conteúdo do arquivo CSV
+    const results = [];
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', () => {
+        // Extrair as colunas do arquivo CSV
+        const columns = Object.keys(results[0]);
+  
+        // Montar a query de criação das colunas
+        let alterTableQuery = `ALTER TABLE ${tableName}`;
+        columns.forEach((column) => {
+          alterTableQuery += ` ADD COLUMN ${column} VARCHAR(255),`;
+        });
+        alterTableQuery = alterTableQuery.slice(0, -1); // Remover a última vírgula
+        alterTableQuery += ';';
+  
+        // Executar a query de alteração da tabela
+        pool.query(alterTableQuery, (err, result) => {
+          if (err) {
+            console.error('Erro ao alterar a tabela:', err);
+            res.status(500).send({ error: 'Erro ao alterar a tabela' });
+          } else {
+            // Inserir os dados na tabela
+            const placeholders = results.map((_, index) => `(${columns.map((_, columnIndex) => `$${index * columns.length + columnIndex + 1}`).join(', ')})`).join(', ');
+            const insertQuery = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES ${placeholders}`;
+            const values = results.flatMap(row => Object.values(row));
+  
+            pool.query(insertQuery, values, (err, result) => {
+              if (err) {
+                console.error('Erro ao inserir dados na tabela:', err);
+                res.status(500).send({ error: 'Erro ao inserir dados na tabela' });
+              } else {
+                console.log(`Dados inseridos na tabela "${tableName}" com sucesso!`);
+                res.send({ message: `Dados inseridos na tabela "${tableName}" com sucesso!` });
+              }
+            });
+          }
+        });
+      });
   });
 
   // Delete user
