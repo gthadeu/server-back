@@ -287,6 +287,90 @@ app.put('/update-password', async (req, res) => {
     res.send({ tableName: tableNameGlobal, filePath: filePathGlobal });
   });
 
+  app.get('/table-list', async (req, res) => {
+    try {
+      const client = await pool.connect();
+  
+      // Consulta SQL para obter todas as tabelas, exceto "user" e "suporte"
+      const query = `
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name NOT IN ('users', 'suporte')
+      `;
+  
+      const result = await client.query(query);
+      const tabelas = result.rows.map(row => row.table_name);
+  
+      client.release();
+  
+      res.json(tabelas);
+    } catch (error) {
+      console.error('Erro ao obter as tabelas do banco de dados:', error);
+      res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+  });
+
+ 
+  app.post('/add-record', upload.single('arquivo'), async (req, res) => {
+    try {
+      const tabela = req.body.tabela;
+      const arquivo = req.file;
+  
+      if (!arquivo) {
+        return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
+      }
+  
+      // Verificar a extensão do arquivo (opcional)
+      const extensao = arquivo.originalname.split('.').pop();
+      if (extensao !== 'csv') {
+        return res.status(400).json({ error: 'Formato de arquivo inválido. Por favor, envie um arquivo CSV.' });
+      }
+  
+      // Lógica para ler o arquivo CSV e adicionar os dados na tabela selecionada
+      const dados = [];
+      fs.createReadStream(arquivo.path)
+        .pipe(csv())
+        .on('data', (data) => {
+          // Adicionar os dados em um array
+          dados.push(data);
+        })
+        .on('end', () => {
+          // Inserir os dados na tabela
+          const insertPromises = dados.map((row) => {
+            const columns = Object.keys(row);
+            const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
+            const values = Object.values(row);
+            const insertQuery = `INSERT INTO ${tabela} (${columns.join(', ')}) VALUES (${placeholders})`;
+  
+            return new Promise((resolve, reject) => {
+              pool.query(insertQuery, values, (err, result) => {
+                if (err) {
+                  console.error('Erro ao inserir dados na tabela:', err);
+                  reject(err);
+                } else {
+                  resolve(result);
+                }
+              });
+            });
+          });
+  
+          Promise.all(insertPromises)
+            .then(() => {
+              res.status(200).json({ message: 'Registros adicionados com sucesso' });
+            })
+            .catch((error) => {
+              console.error('Erro ao adicionar registros:', error);
+              res.status(500).json({ error: 'Erro interno do servidor' });
+            });
+        });
+    } catch (error) {
+      console.error('Erro ao adicionar registros:', error);
+      res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+  });
+  
+
   app.post('/process-table', (req, res) => {
     const { tableName, filePath } = req.body;
   
@@ -331,6 +415,73 @@ app.put('/update-password', async (req, res) => {
         });
       });
   });
+
+  app.post('/replace-records', upload.single('arquivo'), async (req, res) => {
+    try {
+      const tabela = req.body.tabela;
+      const arquivo = req.file;
+  
+      if (!arquivo) {
+        return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
+      }
+  
+      // Verificar a extensão do arquivo (opcional)
+      const extensao = arquivo.originalname.split('.').pop();
+      if (extensao !== 'csv') {
+        return res.status(400).json({ error: 'Formato de arquivo inválido. Por favor, envie um arquivo CSV.' });
+      }
+  
+      // Lógica para ler o arquivo CSV e adicionar os dados na tabela selecionada
+      const dados = [];
+      fs.createReadStream(arquivo.path)
+        .pipe(csv())
+        .on('data', (data) => {
+          // Adicionar os dados em um array
+          dados.push(data);
+        })
+        .on('end', () => {
+          // Limpar registros existentes na tabela
+          pool.query(`DELETE FROM ${tabela}`, (err, result) => {
+            if (err) {
+              console.error('Erro ao limpar registros da tabela:', err);
+              return res.status(500).json({ error: 'Erro interno do servidor' });
+            }
+  
+            // Inserir os dados na tabela
+            const insertPromises = dados.map((row) => {
+              const columns = Object.keys(row);
+              const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
+              const values = Object.values(row);
+              const insertQuery = `INSERT INTO ${tabela} (${columns.join(', ')}) VALUES (${placeholders})`;
+  
+              return new Promise((resolve, reject) => {
+                pool.query(insertQuery, values, (err, result) => {
+                  if (err) {
+                    console.error('Erro ao inserir dados na tabela:', err);
+                    reject(err);
+                  } else {
+                    resolve(result);
+                  }
+                });
+              });
+            });
+  
+            Promise.all(insertPromises)
+              .then(() => {
+                res.status(200).json({ message: 'Registros substituídos com sucesso' });
+              })
+              .catch((error) => {
+                console.error('Erro ao substituir registros:', error);
+                res.status(500).json({ error: 'Erro interno do servidor' });
+              });
+          });
+        });
+    } catch (error) {
+      console.error('Erro ao substituir registros:', error);
+      res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+  });
+  
 
   // Delete user
   app.delete("/users/:id", (req, res) => {
